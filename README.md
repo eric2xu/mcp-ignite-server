@@ -19,10 +19,34 @@ npm run build
 
 ### 2. Get Your Bearer Token
 
+**Method 1: From Cookie (Recommended)**
 1. Sign in at https://ignite.microsoft.com
-2. Open DevTools (F12) → **Network** tab
-3. Browse the site and find an API request
-4. Copy the **Authorization** header token (after "Bearer ")
+2. Open DevTools (F12) → **Application** tab → **Cookies** → `ignite.microsoft.com`
+3. Find the cookie named `ignite2025.prod.token`
+4. Copy the cookie value and prefix it with `Bearer ` (e.g., `Bearer eyJhbGc...`)
+
+**Method 2: Console Script**
+Run this in the browser console on ignite.microsoft.com:
+```javascript
+(function () {
+  const cookies = Object.fromEntries(
+    document.cookie.split(";").map(c => {
+      const [k, ...v] = c.split("=");
+      return [k.trim(), decodeURIComponent(v.join("="))];
+    })
+  );
+
+  const rawToken = cookies["ignite2025.prod.token"];
+  if (!rawToken) {
+    console.warn("ignite2025.prod.token cookie not found");
+    return null;
+  }
+
+  const bearer = `Bearer ${rawToken}`;
+  console.log("Bearer token:", bearer);
+  return bearer;
+})();
+```
 
 Note: This will only allow the MCP server to function for 1 hour at a time, anyone who knows a good way to enhance this like figuring out if there is a refresh token is welcome to contribute to the library.
 
@@ -132,7 +156,6 @@ See `API_RESEARCH.md` for complete documentation.
 ```bash
 npm run build    # Compile TypeScript
 npm run dev      # Watch mode
-npx @modelcontextprotocol/inspector node build/index.js  # Test with MCP Inspector
 ```
 
 ## License

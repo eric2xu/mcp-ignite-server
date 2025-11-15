@@ -29,7 +29,7 @@ const SPEAKERS_CACHE_FILE = path.join(CACHE_DIR, "speakers-cache.json");
 const IGNITE_API_BASE = "https://api-v2.ignite.microsoft.com";
 const POSSIBLE_ENDPOINTS = {
   sessions: "/api/session/all/en-US",
-  sessionDetail: "/api/session/{id}/en-US",
+  sessionDetail: "/api/session/{id}",
   // Schedule endpoint - returns full session objects (preferred!)
   myScheduleSessions: "/api/schedule/sessions/en-US",
   // Speakers endpoint
@@ -51,7 +51,7 @@ interface Session {
   startTime?: string;
   endTime?: string;
   speakers?: string[];
-  tags?: string[];
+  tags?: Array<{displayValue?: string; logicalValue?: string}>;
   location?: string;
   isScheduled?: boolean;
   isFavorite?: boolean;
@@ -168,13 +168,13 @@ class IgniteMCPServer {
         tools: [
           {
             name: "get_all_sessions",
-            description: "Fetch all Microsoft Ignite sessions with automatic caching. Cache auto-refreshes every 15 minutes. Use refresh=true to force immediate refresh.",
+            description: "Fetch all Microsoft Ignite sessions with caching. Cache expires after 15 minutes and will be refreshed on the next request. Use refresh=true to force immediate refresh.",
             inputSchema: {
               type: "object",
               properties: {
                 refresh: {
                   type: "boolean",
-                  description: "Force refresh the cache from the API, bypassing the 15-minute auto-refresh (default: false)",
+                  description: "Force refresh the cache from the API, bypassing the 15-minute cache expiration (default: false)",
                   default: false,
                 },
               },
@@ -236,13 +236,13 @@ class IgniteMCPServer {
           },
           {
             name: "get_all_speakers",
-            description: "Fetch all Microsoft Ignite speakers with automatic caching. Cache auto-refreshes every 60 minutes. Use refresh=true to force immediate refresh.",
+            description: "Fetch all Microsoft Ignite speakers with caching. Cache expires after 60 minutes and will be refreshed on the next request. Use refresh=true to force immediate refresh.",
             inputSchema: {
               type: "object",
               properties: {
                 refresh: {
                   type: "boolean",
-                  description: "Force refresh the cache from the API, bypassing the 60-minute auto-refresh (default: false)",
+                  description: "Force refresh the cache from the API, bypassing the 60-minute cache expiration (default: false)",
                   default: false,
                 },
               },
@@ -250,13 +250,23 @@ class IgniteMCPServer {
           },
           {
             name: "search_speakers",
-            description: "Search speakers by name, company, job title, or bio",
+            description: "Search speakers by name or company. Searches firstName, lastName, displayName, and company fields only. Use firstNameOnly or lastNameOnly for precise name matching.",
             inputSchema: {
               type: "object",
               properties: {
                 query: {
                   type: "string",
                   description: "Search query string",
+                },
+                firstNameOnly: {
+                  type: "boolean",
+                  description: "Search only in first name field (exact word match)",
+                  default: false,
+                },
+                lastNameOnly: {
+                  type: "boolean",
+                  description: "Search only in last name field (exact word match)",
+                  default: false,
                 },
               },
               required: ["query"],
@@ -307,7 +317,7 @@ class IgniteMCPServer {
     const refresh = args?.refresh || false;
 
     try {
-      // Check cache first (auto-refresh after 15 minutes unless force refresh)
+      // Check cache first unless force refresh requested
       if (!refresh) {
         const cache = await this.loadCache(15); // 15 minute cache
         if (cache) {
@@ -317,14 +327,14 @@ class IgniteMCPServer {
               {
                 type: "text",
                 text: `Retrieved ${cache.sessions.length} sessions from cache (cached ${ageMinutes.toFixed(1)} minutes ago).\n\n` +
-                      `Cache auto-refreshes after 15 minutes. Use refresh=true to force refresh now.\n\n` +
+                      `Cache expires after 15 minutes. Use refresh=true to force refresh now.\n\n` +
                       `Cache file: ${CACHE_FILE}\n\n` +
                       `Sample sessions:\n${JSON.stringify(cache.sessions.slice(0, 3), null, 2)}`,
               },
             ],
           };
         }
-        // Cache is stale or doesn't exist, fetch fresh data
+        // Cache is expired or doesn't exist, fetch fresh data
       }
 
       // Fetch from API
@@ -381,7 +391,10 @@ class IgniteMCPServer {
       // Try to get from cache first
       const cache = await this.loadCache();
       if (cache) {
-        const session = cache.sessions.find((s) => s.id === sessionId);
+        // Support both sessionId and localizedId formats
+        const session = cache.sessions.find(
+          (s) => s.sessionId === sessionId || s.localizedId === sessionId
+        );
         if (session) {
           return {
             content: [
@@ -394,15 +407,18 @@ class IgniteMCPServer {
         }
       }
 
-      // Fetch from API
-      const endpoint = POSSIBLE_ENDPOINTS.sessionDetail.replace("{id}", sessionId);
+      // If not in cache, fetch from API using localizedId format
+      // The API expects localizedId (e.g., "en-US-62a4e3c2-3048-42ea-b08b-f2d640ebf427")
+      // If user provided plain sessionId, prepend "en-US-"
+      const localizedId = sessionId.startsWith("en-US-") ? sessionId : `en-US-${sessionId}`;
+      const endpoint = POSSIBLE_ENDPOINTS.sessionDetail.replace("{id}", localizedId);
       const session = await this.makeIgniteRequest(endpoint);
 
       return {
         content: [
           {
             type: "text",
-            text: `Session details:\n\n${JSON.stringify(session, null, 2)}`,
+            text: `Session details (from API):\n\n${JSON.stringify(session, null, 2)}`,
           },
         ],
       };
@@ -419,13 +435,23 @@ class IgniteMCPServer {
       throw new Error("No cached sessions available. Please run get_all_sessions first.");
     }
 
-    const queryLower = query.toLowerCase();
+    const queryLower = query.toLowerCase().trim();
     let results = cache.sessions.filter((session) => {
+      // For speaker names, use word boundary matching to avoid false positives
+      // (e.g., "Mark" shouldn't match "marketing" in a speaker's bio)
+      let matchesSpeakers = false;
+      if (session.speakerNames && typeof session.speakerNames === 'string') {
+        const nameLower = session.speakerNames.toLowerCase();
+        const nameWords = nameLower.split(/\s+/);
+        matchesSpeakers = nameWords.some(word => word === queryLower) || nameLower.includes(queryLower);
+      }
+      
+      // For title, description, and tags, keep substring matching
       const matchesQuery =
         session.title?.toLowerCase().includes(queryLower) ||
         session.description?.toLowerCase().includes(queryLower) ||
-        session.speakers?.some((s) => s.toLowerCase().includes(queryLower)) ||
-        session.tags?.some((t) => t.toLowerCase().includes(queryLower));
+        matchesSpeakers ||
+        session.tags?.some((t) => t.displayValue?.toLowerCase().includes(queryLower) || t.logicalValue?.toLowerCase().includes(queryLower));
 
       const matchesScheduled = !filterScheduled || session.isScheduled;
       const matchesFavorites = !filterFavorites || session.isFavorite;
@@ -572,7 +598,7 @@ class IgniteMCPServer {
                 type: "text",
                 text:
                   `Loaded ${cache.speakers.length} speakers from cache (cached ${ageMinutes.toFixed(1)} minutes ago).\n\n` +
-                  `Cache auto-refreshes after 60 minutes. Use refresh=true to force refresh now.\n\n` +
+                  `Cache expires after 60 minutes. Use refresh=true to force refresh now.\n\n` +
                   `Cache file: ${SPEAKERS_CACHE_FILE}\n\n` +
                   `Sample speakers:\n${JSON.stringify(cache.speakers.slice(0, 5), null, 2)}`,
               },
@@ -603,7 +629,7 @@ class IgniteMCPServer {
             text:
               `Successfully fetched ${speakers.length} speakers from the API.\n\n` +
               `Cache saved to: ${SPEAKERS_CACHE_FILE}\n\n` +
-              `Cache will auto-refresh after 60 minutes.\n\n` +
+              `Cache will expire after 60 minutes.\n\n` +
               `Sample speakers:\n${JSON.stringify(speakers.slice(0, 5), null, 2)}`,
           },
         ],
@@ -614,23 +640,41 @@ class IgniteMCPServer {
   }
 
   private async handleSearchSpeakers(args: any) {
-    const { query } = args;
+    const { query, firstNameOnly = false, lastNameOnly = false } = args;
 
     const cache = await this.loadSpeakersCache();
     if (!cache) {
       throw new Error("No cached speakers available. Please run get_all_speakers first.");
     }
 
-    const queryLower = query.toLowerCase();
+    const queryLower = query.toLowerCase().trim();
+    
     const results = cache.speakers.filter((speaker) => {
-      return (
-        speaker.displayName?.toLowerCase().includes(queryLower) ||
-        speaker.firstName?.toLowerCase().includes(queryLower) ||
-        speaker.lastName?.toLowerCase().includes(queryLower) ||
-        speaker.company?.toLowerCase().includes(queryLower) ||
-        speaker.jobTitle?.toLowerCase().includes(queryLower) ||
-        speaker.bio?.toLowerCase().includes(queryLower)
-      );
+      // If searching by first name only
+      if (firstNameOnly) {
+        const firstName = speaker.firstName?.toLowerCase() || "";
+        // Check if query matches as a whole word in first name
+        return firstName === queryLower || firstName.split(/\s+/).includes(queryLower);
+      }
+      
+      // If searching by last name only
+      if (lastNameOnly) {
+        const lastName = speaker.lastName?.toLowerCase() || "";
+        // Check if query matches as a whole word in last name
+        return lastName === queryLower || lastName.split(/\s+/).includes(queryLower);
+      }
+      
+      // Default: search ONLY in firstName, lastName, displayName, and company
+      const displayName = speaker.displayName?.toLowerCase() || "";
+      const firstName = speaker.firstName?.toLowerCase() || "";
+      const lastName = speaker.lastName?.toLowerCase() || "";
+      const company = speaker.company?.toLowerCase() || "";
+      
+      // Check if query matches in these specific fields (substring match)
+      return displayName.includes(queryLower) ||
+             firstName.includes(queryLower) ||
+             lastName.includes(queryLower) ||
+             company.includes(queryLower);
     });
 
     return {

@@ -1,6 +1,6 @@
 {
   "name": "mcp-ignite-server",
-  "version": "2025.0.1",
+  "version": "2025.0.2",
   "description": "MCP Server for Microsoft Ignite session data",
   "type": "module",
   "bin": {

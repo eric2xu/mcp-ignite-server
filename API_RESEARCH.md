@@ -75,11 +75,37 @@ https://api-v2.ignite.microsoft.com
 
 ### Bearer Token
 - **Header**: `Authorization: Bearer {token}`
+- **Token Location**: Found in cookie `ignite2025.prod.token` on ignite.microsoft.com domain
 - **How to Get**: 
+  
+  **Method 1 (Recommended):**
   1. Sign in to https://ignite.microsoft.com
-  2. Open DevTools → Network tab
-  3. Look for any API call in Request Headers
-  4. Copy the token after "Bearer "
+  2. Open DevTools (F12) → Application tab → Cookies → ignite.microsoft.com
+  3. Find cookie named `ignite2025.prod.token`
+  4. Copy the cookie value and prefix with `Bearer ` (e.g., `Bearer eyJhbGc...`)
+  
+  **Method 2 (Console Script):**
+  Run this in the browser console on ignite.microsoft.com:
+  ```javascript
+  (function () {
+    const cookies = Object.fromEntries(
+      document.cookie.split(";").map(c => {
+        const [k, ...v] = c.split("=");
+        return [k.trim(), decodeURIComponent(v.join("="))];
+      })
+    );
+
+    const rawToken = cookies["ignite2025.prod.token"];
+    if (!rawToken) {
+      console.warn("ignite2025.prod.token cookie not found");
+      return null;
+    }
+
+    const bearer = `Bearer ${rawToken}`;
+    console.log("Bearer token:", bearer);
+    return bearer;
+  })();
+  ```
 - **Expiration**: Tokens expire periodically (1 hour)
 - **Format**: Long alphanumeric string (JWT-style)
 
