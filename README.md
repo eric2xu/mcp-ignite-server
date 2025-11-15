@@ -1,85 +1,47 @@
 # Microsoft Ignite MCP Server
 
-A Model Context Protocol (MCP) server that provides access to Microsoft Ignite conference session data, including your personal schedule and favorites.
+A Model Context Protocol (MCP) server providing access to Microsoft Ignite 2025 conference data—1,033 sessions, 1,579 speakers, plus your personal schedule and favorites.
 
 ## Features
 
-This MCP server provides 7 tools to access Microsoft Ignite 2025 data:
+- **7 MCP Tools**: Search sessions/speakers, get schedules, view favorites, and fetch complete conference data
+- **Smart Caching**: Auto-refresh every 15 mins (sessions) and 60 mins (speakers) for fast, reliable access
+- **Personal Data**: Full access to your authenticated Ignite schedule and favorites
+- **Production Ready**: Tested with Claude Desktop and VS Code
 
-### Session Tools
-- **get_all_sessions**: Download and cache all 1,033 Ignite sessions (auto-refreshes every 15 minutes)
-- **get_session_details**: Retrieve detailed information about a specific session by ID
-- **search_sessions**: Find sessions by title, description, speaker, or tags with optional filters
-- **get_my_schedule**: View all sessions you've added to your personal schedule (full session objects)
-- **get_favorites**: View sessions you've favorited and labs you've registered for
+## Quick Start
 
-### Speaker Tools
-- **get_all_speakers**: Download and cache all 1,579 speakers (auto-refreshes every 60 minutes)
-- **search_speakers**: Search speakers by name, company, job title, or biography
-
-### Key Features
-- ✅ **Smart Caching**: Automatic cache management with configurable refresh intervals
-- ✅ **Real-time Data**: Direct access to Microsoft Ignite API with your authenticated token
-- ✅ **Fast Search**: In-memory search across all sessions and speakers
-- ✅ **Personal Data**: Access your schedule and favorites with full session details
-- ✅ **Production Ready**: Fully tested and working with Claude Desktop
-
-## Prerequisites
-
-- Node.js 18 or higher
-- A valid bearer token from ignite.microsoft.com
-
-## Installation
-
-1. Clone this repository or download the files
-
-2. Install dependencies:
+### 1. Install Dependencies
 ```bash
 npm install
-```
-
-3. Build the server:
-```bash
 npm run build
 ```
 
-## Configuration
+### 2. Get Your Bearer Token
 
-### Getting Your Bearer Token
+1. Sign in at https://ignite.microsoft.com
+2. Open DevTools (F12) → **Network** tab
+3. Browse the site and find an API request
+4. Copy the **Authorization** header token (after "Bearer ")
 
-To use this server, you need to obtain your bearer token from the Microsoft Ignite website:
+Note: This will only allow the MCP server to function for 1 hour at a time, anyone who knows a good way to enhance this like figuring out if there is a refresh token is welcome to contribute to the library.
 
-1. Go to https://ignite.microsoft.com and sign in
-2. Open your browser's Developer Tools (F12)
-3. Go to the **Network** tab
-4. Browse the Ignite site (view sessions, your schedule, etc.)
-5. Look for API calls in the Network tab (filter by XHR/Fetch)
-6. Click on an API request and look for the **Authorization** header in the Request Headers
-7. Copy the token that comes after "Bearer " (it will be a long string)
+### 3. Configure Token (optional)
 
-### Setting Up Your Environment
-
-Create a `.env` file in the project root:
-
+Create a `.env` file:
 ```bash
-cp .env.example .env
-```
-
-Edit the `.env` file and add your bearer token:
-
-```
 IGNITE_BEARER_TOKEN=your_token_here
 ```
 
-**Important**: Keep your bearer token secure and never commit it to version control!
+Note: You can also just put this into the mcp env config
 
-## Usage
+⚠️ **Never commit your token to version control!**
 
-### With Claude Desktop
+## Configuration
 
-Add this server to your Claude Desktop configuration file:
+### Claude Desktop
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
@@ -87,7 +49,7 @@ Add this server to your Claude Desktop configuration file:
   "mcpServers": {
     "ignite": {
       "command": "node",
-      "args": ["build/index.js"],
+      "args": ["/absolute/path/to/mcp-ignite-server/build/index.js"],
       "env": {
         "IGNITE_BEARER_TOKEN": "your_token_here"
       }
@@ -96,206 +58,93 @@ Add this server to your Claude Desktop configuration file:
 }
 ```
 
-Or use the path to your `.env` file by just pointing to the built server:
+### VS Code (Copilot)
+
+Create or edit `.vscode/settings.json` in your workspace:
 
 ```json
 {
-  "mcpServers": {
+  "github.copilot.chat.codeGeneration.instructions": [
+    {
+      "text": "Use MCP tools when available"
+    }
+  ],
+  "github.copilot.chat.mcp.enabled": true,
+  "github.copilot.chat.mcp.servers": {
     "ignite": {
       "command": "node",
-      "args": ["build/index.js"]
+      "args": ["/absolute/path/to/mcp-ignite-server/build/index.js"],
+      "env": {
+        "IGNITE_BEARER_TOKEN": "your_token_here"
+      }
     }
   }
 }
-
-
 ```
 
-### With Other MCP Clients
+Restart VS Code after adding the configuration.
 
-Run the server directly:
+## MCP Tools Reference
 
-```bash
-node build/index.js
-```
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| **get_all_sessions** | Fetch all 1,033 sessions (cached) | `refresh?: boolean` |
+| **get_session_details** | Get specific session info | `sessionId: string` |
+| **search_sessions** | Find sessions by keyword | `query: string`, `filterScheduled?`, `filterFavorites?` |
+| **get_my_schedule** | Your personal schedule | — |
+| **get_favorites** | Your favorited sessions/labs | — |
+| **get_all_speakers** | Fetch all 1,579 speakers (cached) | `refresh?: boolean` |
+| **search_speakers** | Find speakers by keyword | `query: string` |
 
-## Available Tools
+**Examples:**
+- "Show me all AI sessions in my schedule"
+- "Find speakers from Microsoft working on Azure"
+- "Get details for session BRK123"
 
-### get_all_sessions
+## Caching & Data
 
-Fetches all Microsoft Ignite sessions and caches them locally.
+Cache files stored in `data/`:
+- **sessions-cache.json** (~8MB, refreshes every 15 min)
+- **speakers-cache.json** (~2MB, refreshes every 60 min)
 
-**Parameters**:
-- `refresh` (boolean, optional): Force refresh the cache (default: false)
+Benefits: instant responses, offline capability, reduced API load.
 
-**Example**:
-```
-Get all Ignite sessions
-```
+## API Details
 
-### get_session_details
+Uses official Microsoft Ignite API (`https://api-v2.ignite.microsoft.com`):
+- `/api/session/all/en-US` - All sessions
+- `/api/schedule/sessions/en-US` - Your schedule  
+- `/api/speaker/all/en-US` - All speakers
+- `/api/favorite/*` - Your favorites
 
-Get detailed information about a specific session.
-
-**Parameters**:
-- `sessionId` (string, required): The session ID
-
-**Example**:
-```
-Get details for session ABC123
-```
-
-### search_sessions
-
-Search for sessions by keyword.
-
-**Parameters**:
-- `query` (string, required): Search query
-- `filterScheduled` (boolean, optional): Only show scheduled sessions
-- `filterFavorites` (boolean, optional): Only show favorited sessions
-
-**Example**:
-```
-Search for sessions about "AI" that I've favorited
-```
-
-### get_my_schedule
-
-Get all sessions in your personal schedule.
-
-**Example**:
-```
-Show me my Ignite schedule
-```
-
-### get_favorites
-
-Get all your favorited sessions and registered labs.
-
-**Example**:
-```
-Show me my favorite Ignite sessions
-```
-
-### get_all_speakers
-
-Fetches all Microsoft Ignite speakers and caches them locally.
-
-**Parameters**:
-- `refresh` (boolean, optional): Force refresh the cache (default: false)
-
-**Example**:
-```
-Get all Ignite speakers
-```
-
-### search_speakers
-
-Search for speakers by name, company, job title, or bio.
-
-**Parameters**:
-- `query` (string, required): Search query
-
-**Example**:
-```
-Search for speakers from Microsoft who work on Azure
-```
-
-## Data Storage
-
-### Cache Files
-
-The server maintains two cache files in the `data/` directory:
-
-1. **sessions-cache.json** (~8MB)
-   - All 1,033 session objects with complete details
-   - Cached timestamp for auto-refresh management
-   - Auto-refreshes every 15 minutes
-   - Contains: titles, descriptions, speakers, times, locations, tags, etc.
-
-2. **speakers-cache.json** (~2MB)
-   - All 1,579 speaker profiles
-   - Cached timestamp for auto-refresh management  
-   - Auto-refreshes every 60 minutes
-   - Contains: names, titles, companies, bios, photos, session lists, etc.
-
-### Cache Benefits
-- **Speed**: Instant responses after initial fetch (vs. 2-3 seconds from API)
-- **Reliability**: Works offline once data is cached
-- **API-Friendly**: Reduces load on Microsoft's servers
-- **Smart Updates**: Automatic refresh based on data freshness
-
-You can manually inspect, edit, or delete these cache files. The server will automatically fetch fresh data if cache is missing or stale.
-
-## Important Notes
-
-### API Endpoints (Confirmed Working)
-
-✅ **This server uses the official Microsoft Ignite API endpoints** that have been tested and confirmed working:
-
-- **Base URL**: `https://api-v2.ignite.microsoft.com`
-- **Sessions**: `/api/session/all/en-US` (1,033 sessions)
-- **Schedule**: `/api/schedule/sessions/en-US` (returns full session objects)
-- **Speakers**: `/api/speaker/all/en-US` (1,579 speakers)
-- **Favorites**: `/api/favorite/1` and `/api/favorite/4` (returns IDs)
-
-See `API_RESEARCH.md` for complete endpoint documentation and response structures.
-
-### Token Expiration
-
-Bearer tokens typically expire after a certain period. If you start getting authentication errors:
-1. Sign in to ignite.microsoft.com again
-2. Obtain a fresh bearer token
-3. Update your `.env` file
-
-### Privacy & Security
-
-- Your bearer token is personal and should be kept secure
-- Never share your token or commit it to public repositories
-- The token gives access to your Ignite account data
-- This server only reads data; it does not modify your schedule or favorites
+See `API_RESEARCH.md` for complete documentation.
 
 ## Troubleshooting
 
-### "IGNITE_BEARER_TOKEN is not set"
-Make sure you've created a `.env` file with your token, or passed it via environment variables.
-
-### "API request failed: 401"
-Your bearer token may have expired or is invalid. Obtain a fresh token from the website.
-
-### "Failed to fetch from Ignite API"
-The API endpoints may have changed. Check the error message for clues and inspect network traffic at ignite.microsoft.com to find the correct endpoints.
-
-### "No cached sessions available"
-Run the `get_all_sessions` tool first to download and cache the session data.
+| Issue | Solution |
+|-------|----------|
+| "IGNITE_BEARER_TOKEN is not set" | Create `.env` file with your token |
+| "API request failed: 401" | Token expired—get a fresh one |
+| "No cached sessions available" | Run `get_all_sessions` first |
 
 ## Development
 
-### Building
 ```bash
-npm run build
+npm run build    # Compile TypeScript
+npm run dev      # Watch mode
+npx @modelcontextprotocol/inspector node build/index.js  # Test with MCP Inspector
 ```
-
-### Development Mode (Watch)
-```bash
-npm run dev
-```
-
-### Testing
-You can test the server using the MCP Inspector:
-
-```bash
-npx @modelcontextprotocol/inspector node build/index.js
-```
-
-## Contributing
-
-Found the actual API endpoints? Please consider contributing them back to improve this server for everyone!
 
 ## License
 
 MIT
 
+## Security & Privacy
+
+- Keep your bearer token secure—never commit or share it
+- Tokens expire periodically; refresh as needed
+- Server is read-only; it won't modify your data
+
 ## Disclaimer
 
-This is an unofficial tool and is not affiliated with or endorsed by Microsoft. Use at your own risk and respect Microsoft's terms of service.
+Unofficial tool, not affiliated with Microsoft. Use responsibly and respect Microsoft's terms of service.
