@@ -2,8 +2,14 @@
 
 A Model Context Protocol (MCP) server providing access to Microsoft Ignite 2025 conference data—1,033 sessions, 1,579 speakers, plus your personal schedule and favorites.
 
-## Features
+## Examples: 
+<div align="center">
+  <img src="images/image.png" alt="Screenshot 1" width="30%" />
+  <img src="images/image-1.png" alt="Screenshot 2" width="30%" />
+  <img src="images/image-2.png" alt="Screenshot 3" width="30%" />
+</div>
 
+## Features
 - **7 MCP Tools**: Search sessions/speakers, get schedules, view favorites, and fetch complete conference data
 - **Smart Caching**: Auto-refresh every 15 mins (sessions) and 60 mins (speakers) for fast, reliable access
 - **Personal Data**: Full access to your authenticated Ignite schedule and favorites
