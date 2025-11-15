@@ -10,24 +10,26 @@ Implemented intelligent time-based caching for both sessions and speakers data t
 
 ### Sessions Cache
 - **File:** `sessions-cache.json`
-- **Auto-refresh interval:** 15 minutes
+- **Cache expiration:** 15 minutes
+- **Refresh behavior:** Expires after 15 minutes, refreshes on next `get_all_sessions` call
 - **Reasoning:** Session data may change frequently (schedule updates, new sessions added)
-- **Force refresh:** Use `refresh=true` parameter
+- **Force refresh:** Use `refresh=true` parameter to bypass cache immediately
 
 ### Speakers Cache
 - **File:** `speakers-cache.json`
-- **Auto-refresh interval:** 60 minutes (1 hour)
+- **Cache expiration:** 60 minutes (1 hour)
+- **Refresh behavior:** Expires after 60 minutes, refreshes on next `get_all_speakers` call
 - **Reasoning:** Speaker data rarely changes during the event
-- **Force refresh:** Use `refresh=true` parameter
+- **Force refresh:** Use `refresh=true` parameter to bypass cache immediately
 
 ## How It Works
 
 ### Automatic Cache Validation
 1. When a tool is called (without `refresh=true`), the system checks if cache exists
 2. If cache exists, it checks the age based on `cachedAt` timestamp
-3. If cache is **older than the threshold**, it's considered stale and auto-refreshes
+3. If cache is **older than the expiration threshold**, it's considered expired and will refresh on the next call
 4. If cache is **within the threshold**, it returns cached data with age info
-5. If cache doesn't exist, it fetches from API
+5. If cache doesn't exist, it fetches from API and creates the cache
 
 ### Force Refresh
 - Setting `refresh=true` bypasses all cache checks
@@ -58,55 +60,57 @@ Implemented intelligent time-based caching for both sessions and speakers data t
 ### `get_all_sessions`
 **Behavior:**
 - First call: Fetches from API, caches for 15 minutes
-- Subsequent calls: Returns cached data with age indicator
-- After 15 minutes: Automatically fetches fresh data
-- With `refresh=true`: Immediately fetches fresh data
+- Subsequent calls within 15 min: Returns cached data with age indicator
+- After 15 minutes: Cache expires, next call fetches fresh data from API
+- With `refresh=true`: Immediately bypasses cache and fetches fresh data
 
 **Response includes:**
 - Number of sessions
-- Cache age in minutes
-- Auto-refresh policy
+- Cache age in minutes (when using cache)
+- Cache expiration policy
 - Sample sessions
 
-**Example:**
+**Example (cached response):**
 ```
 Retrieved 1033 sessions from cache (cached 8.3 minutes ago).
 
-Cache auto-refreshes after 15 minutes. Use refresh=true to force refresh now.
+Cache expires after 15 minutes. Use refresh=true to force refresh now.
 ```
 
 ### `get_all_speakers`
 **Behavior:**
 - First call: Fetches from API, caches for 60 minutes
-- Subsequent calls: Returns cached data with age indicator
-- After 60 minutes: Automatically fetches fresh data
-- With `refresh=true`: Immediately fetches fresh data
+- Subsequent calls within 60 min: Returns cached data with age indicator
+- After 60 minutes: Cache expires, next call fetches fresh data from API
+- With `refresh=true`: Immediately bypasses cache and fetches fresh data
 
 **Response includes:**
 - Number of speakers
-- Cache age in minutes
-- Auto-refresh policy
+- Cache age in minutes (when using cache)
+- Cache expiration policy
 - Sample speakers
 
-**Example:**
+**Example (cached response):**
 ```
 Loaded 1579 speakers from cache (cached 23.5 minutes ago).
 
-Cache auto-refreshes after 60 minutes. Use refresh=true to force refresh now.
+Cache expires after 60 minutes. Use refresh=true to force refresh now.
 ```
 
 ## Benefits
 
 ### For Users
 - ✅ Fast responses from cached data
-- ✅ Automatic freshness without manual intervention
+- ✅ Data stays fresh with expiration-based refresh on next call
 - ✅ Clear visibility into cache age
 - ✅ Control via force refresh when needed
+- ✅ No unnecessary API calls
 
 ### For API
-- ✅ Reduced load (max 4 calls/hour for sessions, 1 call/hour for speakers per user)
+- ✅ Reduced load (cache prevents repeated calls within expiration window)
 - ✅ Respectful usage patterns
 - ✅ Efficient bandwidth usage
+- ✅ Only refreshes when data is actually requested after expiration
 
 ### For Development
 - ✅ Faster testing cycles (no API delays)
@@ -152,7 +156,7 @@ private async loadSpeakersCache(maxAgeMinutes: number = 60): Promise<{ speakers:
 
 ## Usage Examples
 
-### Normal Usage (Auto-refresh)
+### Normal Usage (Expiration-based Refresh)
 ```json
 // First call - fetches and caches
 {"name": "get_all_sessions", "arguments": {}}
@@ -160,7 +164,7 @@ private async loadSpeakersCache(maxAgeMinutes: number = 60): Promise<{ speakers:
 // Within 15 minutes - uses cache
 {"name": "get_all_sessions", "arguments": {}}
 
-// After 15 minutes - auto-refreshes
+// After 15 minutes - next call refreshes from API
 {"name": "get_all_sessions", "arguments": {}}
 ```
 
@@ -187,17 +191,17 @@ Speakers cache is 67.8 minutes old, exceeds max age of 60 minutes
 
 ## Testing the Caching
 
-### Test Auto-refresh for Sessions (15 min)
+### Test Cache Expiration for Sessions (15 min)
 1. Call `get_all_sessions` - should fetch from API
-2. Call `get_all_sessions` again - should use cache
+2. Call `get_all_sessions` again immediately - should use cache
 3. Wait 16 minutes
-4. Call `get_all_sessions` - should auto-refresh from API
+4. Call `get_all_sessions` - should detect expired cache and refresh from API
 
-### Test Auto-refresh for Speakers (60 min)
+### Test Cache Expiration for Speakers (60 min)
 1. Call `get_all_speakers` - should fetch from API
-2. Call `get_all_speakers` again - should use cache
+2. Call `get_all_speakers` again immediately - should use cache
 3. Wait 61 minutes
-4. Call `get_all_speakers` - should auto-refresh from API
+4. Call `get_all_speakers` - should detect expired cache and refresh from API
 
 ### Test Force Refresh
 1. Call `get_all_sessions` with `refresh=true` - fetches immediately
@@ -227,11 +231,12 @@ Possible improvements:
 
 ## Summary
 
-✅ **Implemented intelligent time-based caching**
-- Sessions: 15-minute auto-refresh
-- Speakers: 60-minute auto-refresh
-- Force refresh option available
+✅ **Implemented intelligent time-based caching with expiration**
+- Sessions: 15-minute cache expiration
+- Speakers: 60-minute cache expiration
+- Refresh occurs on next call after expiration
+- Force refresh option available for immediate bypass
 - Cache age visibility
-- Automatic stale cache handling
-- Minimal API calls
-- Maximum performance
+- Automatic expired cache detection
+- Minimal API calls (only when needed)
+- Maximum performance for cached responses
