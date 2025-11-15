@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ignite": {
+      "command": "node",
+      "args": [
+        "/Users/username/GitRepos/Local/MCP_Ignite/build/index.js"
+      ],
+      "env": {
+        "IGNITE_BEARER_TOKEN": "YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}

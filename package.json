@@ -1,0 +1,28 @@
+{
+  "name": "mcp-ignite-server",
+  "version": "2025.0.1",
+  "description": "MCP Server for Microsoft Ignite session data",
+  "type": "module",
+  "bin": {
+    "mcp-ignite-server": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod 755 build/index.js",
+    "dev": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "keywords": ["mcp", "microsoft-ignite", "conference", "ignite"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "dotenv": "^16.4.7",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.3"
+  },
+  "files": ["build"]
+}
